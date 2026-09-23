@@ -1,0 +1,12 @@
+# Python の仮想環境・キャッシュ
+.venv/
+__pycache__/
+*.pyc
+
+# データベース（個人データなのでGitには含めない）
+tagclip.db
+tagclip.db-journal
+
+# OS が作るファイル
+.DS_Store
+Thumbs.db

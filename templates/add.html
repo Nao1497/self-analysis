@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}URL登録 - TagClip{% endblock %}
+{% block content %}
+
+<h1>URL登録</h1>
+
+{% if not domains %}
+  <p class="flash flash-error">対象ドメインが未設定です。先に<a href="{{ url_for('settings') }}">設定画面</a>で設定してください。</p>
+{% elif selector_missing %}
+  <p class="flash flash-error">タグのCSSセレクタが未設定です。<a href="{{ url_for('settings') }}">設定画面</a>で設定してください。</p>
+{% endif %}
+
+{% if results %}
+  <section class="card">
+    <h2>登録結果：登録 {{ added }} 件 ／ 登録しなかったもの {{ skipped }} 件</h2>
+    <ul class="results">
+      {% for r in results %}
+        <li class="{{ 'ok' if r.ok else 'ng' }}">
+          <span class="mark">{{ '✔' if r.ok else '✕' }}</span>
+          <span class="url">{{ r.url }}</span>
+          <span class="reason">{{ r.reason }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+    {% if added %}
+      <p class="muted">タグは裏側で1件ずつ順番に取得しています。進み具合は画面上部に表示されます。</p>
+    {% endif %}
+  </section>
+{% endif %}
+
+<form class="card" method="post">
+  <label for="urls">記事のURL（1行に1つ。複数まとめて貼り付けできます）</label>
+  <textarea id="urls" name="urls" rows="8" placeholder="https://example.com/articles/123&#10;https://example.com/articles/456">{{ text }}</textarea>
+  {% if domains %}
+    <p class="muted">対象ドメイン：{{ domains|join('、') }}（サブドメインを含む）</p>
+  {% endif %}
+  <button type="submit">登録する</button>
+</form>
+
+{% endblock %}

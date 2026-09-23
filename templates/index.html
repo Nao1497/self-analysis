@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block content %}
+
+<form class="card search" method="get" action="{{ url_for('index') }}">
+  <div class="row">
+    <input type="search" name="q" value="{{ filters.q }}" placeholder="タイトルで検索">
+    <button type="submit">検索</button>
+  </div>
+
+  <div class="row options">
+    <label>並び順
+      <select name="sort" onchange="this.form.submit()">
+        <option value="new" {{ 'selected' if filters.sort == 'new' }}>登録が新しい順</option>
+        <option value="old" {{ 'selected' if filters.sort == 'old' }}>登録が古い順</option>
+      </select>
+    </label>
+    <label>状態
+      <select name="status" onchange="this.form.submit()">
+        <option value="">すべて（{{ counts.all }}）</option>
+        <option value="ok" {{ 'selected' if filters.status == 'ok' }}>取得済み（{{ counts.ok }}）</option>
+        <option value="error" {{ 'selected' if filters.status == 'error' }}>エラー（{{ counts.error }}）</option>
+        <option value="pending" {{ 'selected' if filters.status == 'pending' }}>取得待ち（{{ counts.pending }}）</option>
+      </select>
+    </label>
+  </div>
+
+  <details class="tag-picker" {{ 'open' if filters.tags }}>
+    <summary>タグで絞り込む{% if filters.tags %}（{{ filters.tags|length }}個選択中）{% endif %}</summary>
+    <div class="row options">
+      <span>複数タグの条件：</span>
+      <label class="radio"><input type="radio" name="mode" value="and" {{ 'checked' if filters.mode == 'and' }}> すべて含む（AND）</label>
+      <label class="radio"><input type="radio" name="mode" value="or" {{ 'checked' if filters.mode == 'or' }}> どれかを含む（OR）</label>
+    </div>
+    {% if all_tags %}
+      <input type="search" class="tag-filter" data-target="#tag-checks" placeholder="タグ名で候補を絞る">
+      <div id="tag-checks" class="tag-checks">
+        {% set selected = filters.tags|map('lower')|list %}
+        {% for name, cnt in all_tags %}
+          <label class="tag-check" data-name="{{ name|lower }}">
+            <input type="checkbox" name="tag" value="{{ name }}" {{ 'checked' if name|lower in selected }}>
+            <span>{{ name }}<small>{{ cnt }}</small></span>
+          </label>
+        {% endfor %}
+      </div>
+      <div class="row">
+        <button type="submit">この条件で絞り込む</button>
+      </div>
+    {% else %}
+      <p class="muted">まだタグがありません。</p>
+    {% endif %}
+  </details>
+</form>
+
+{% if filters.tags or filters.q or filters.status %}
+  <div class="active-filters">
+    {% for t in filters.tags %}
+      <a class="chip chip-active" href="{{ list_url(filters, tags=filters.tags|reject('equalto', t)|list, page=1) }}" title="この条件を外す">{{ t }} ✕</a>
+    {% endfor %}
+    {% if filters.tags|length > 1 %}<span class="muted">（{{ 'すべて含む' if filters.mode == 'and' else 'どれかを含む' }}）</span>{% endif %}
+    {% if filters.q %}<a class="chip chip-active" href="{{ list_url(filters, q='', page=1) }}">「{{ filters.q }}」 ✕</a>{% endif %}
+    {% if filters.status %}<a class="chip chip-active" href="{{ list_url(filters, status='', page=1) }}">{{ status_labels[filters.status] }} ✕</a>{% endif %}
+    <a class="clear" href="{{ url_for('index') }}">条件をすべて解除</a>
+  </div>
+{% endif %}
+
+<div class="list-head">
+  <span><strong>{{ total }}</strong> 件</span>
+  <span class="list-actions">
+    {% if counts.error %}
+      <form method="post" action="{{ url_for('refetch_errors') }}" onsubmit="return confirm('エラーの記事 {{ counts.error }} 件をすべて再取得しますか？')">
+        <input type="hidden" name="next" value="{{ request.full_path }}">
+        <button type="submit" class="small secondary">エラーを再取得</button>
+      </form>
+    {% endif %}
+    <a class="button small secondary" href="{{ url_for('export_csv') }}">CSVで保存</a>
+  </span>
+</div>
+
+{% if not articles %}
+  <p class="card muted">
+    {% if counts.all == 0 %}
+      まだ記事がありません。まず<a href="{{ url_for('settings') }}">設定</a>で対象ドメインとセレクタを設定し、<a href="{{ url_for('add') }}">登録</a>からURLを追加してください。
+    {% else %}
+      条件に合う記事はありません。
+    {% endif %}
+  </p>
+{% endif %}
+
+<ul class="articles">
+  {% for a in articles %}
+    <li class="card article status-{{ a.status }}">
+      <div class="article-title">
+        <a href="{{ a.url }}" target="_blank" rel="noopener noreferrer">{{ a.title or a.url }}</a>
+      </div>
+      <div class="meta">
+        <span>{{ a.created_at[:16] }}</span>
+        {% if a.status != 'ok' %}<span class="badge badge-{{ a.status }}">{{ status_labels[a.status] }}</span>{% endif %}
+        <a class="edit" href="{{ url_for('article', article_id=a.id, next=request.full_path) }}">編集</a>
+      </div>
+      {% if a.status == 'error' %}<p class="error-text">{{ a.error_message }}</p>{% endif %}
+      {% if a.tags %}
+        <div class="chips">
+          {% for t in a.tags %}
+            <a class="chip" href="{{ url_for('index', tag=t) }}">{{ t }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </li>
+  {% endfor %}
+</ul>
+
+{% if pages > 1 %}
+  <nav class="pager">
+    {% if filters.page > 1 %}<a class="button secondary" href="{{ list_url(filters, page=filters.page - 1) }}">← 前へ</a>{% endif %}
+    <span>{{ filters.page }} / {{ pages }}</span>
+    {% if filters.page < pages %}<a class="button secondary" href="{{ list_url(filters, page=filters.page + 1) }}">次へ →</a>{% endif %}
+  </nav>
+{% endif %}
+
+{% endblock %}

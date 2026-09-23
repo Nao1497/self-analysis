@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}記事の編集 - TagClip{% endblock %}
+{% block content %}
+
+<p><a href="{{ back }}">← 一覧に戻る</a></p>
+<h1>記事の編集</h1>
+
+<section class="card">
+  <dl>
+    <dt>URL</dt>
+    <dd class="break"><a href="{{ article.url }}" target="_blank" rel="noopener noreferrer">{{ article.url }}</a></dd>
+    <dt>状態</dt>
+    <dd>
+      <span class="badge badge-{{ article.status }}">{{ status_labels[article.status] }}</span>
+      {% if article.error_message %}<p class="error-text">{{ article.error_message }}</p>{% endif %}
+    </dd>
+    <dt>登録日時</dt><dd>{{ article.created_at }}</dd>
+    <dt>最終取得日時</dt><dd>{{ article.fetched_at or '—' }}</dd>
+  </dl>
+</section>
+
+<form class="card" method="post">
+  <input type="hidden" name="next" value="{{ back }}">
+  <label for="title">タイトル</label>
+  <input type="text" id="title" name="title" value="{{ article.title }}">
+
+  <label for="tags">タグ（1行に1つ）</label>
+  <textarea id="tags" name="tags" rows="{{ [article.tags|length + 2, 5]|max }}" autocapitalize="off">{{ article.tags|join('\n') }}</textarea>
+  <p class="muted">行を追加するとタグの追加、書き換えると修正、行を消すと削除になります。</p>
+
+  <button type="submit">保存する</button>
+</form>
+
+<div class="card danger-zone">
+  <form method="post" action="{{ url_for('refetch', article_id=article.id) }}"
+        onsubmit="return confirm('ページからタグを取得し直します。手動で編集したタグは上書きされます。よろしいですか？')">
+    <input type="hidden" name="next" value="{{ url_for('article', article_id=article.id, next=back) }}">
+    <button type="submit" class="secondary">ページから再取得</button>
+  </form>
+  <form method="post" action="{{ url_for('delete', article_id=article.id) }}"
+        onsubmit="return confirm('この記事を削除します。元に戻せません。よろしいですか？')">
+    <input type="hidden" name="next" value="{{ back }}">
+    <button type="submit" class="danger">記事を削除</button>
+  </form>
+</div>
+
+{% endblock %}

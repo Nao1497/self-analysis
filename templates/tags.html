@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}タグ一覧 - TagClip{% endblock %}
+{% block content %}
+
+<h1>タグ一覧（{{ tags|length }} 種類）</h1>
+
+<div class="card">
+  <div class="row options">
+    <span>並び順：</span>
+    {% if order == 'count' %}<strong>件数順</strong>{% else %}<a href="{{ url_for('tags') }}">件数順</a>{% endif %}
+    ／
+    {% if order == 'name' %}<strong>名前順</strong>{% else %}<a href="{{ url_for('tags', order='name') }}">名前順</a>{% endif %}
+  </div>
+  {% if tags %}
+    <input type="search" class="tag-filter" data-target="#tag-list" placeholder="タグ名で絞る">
+    <div id="tag-list" class="chips tag-cloud">
+      {% for name, cnt in tags %}
+        <a class="chip" data-name="{{ name|lower }}" href="{{ url_for('index', tag=name) }}">{{ name }}<small>{{ cnt }}</small></a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">まだタグがありません。</p>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}設定 - TagClip{% endblock %}
+{% block content %}
+
+<h1>設定</h1>
+
+<form class="card" method="post" action="{{ url_for('settings') }}">
+  <label for="target_domains">対象ドメイン（1行に1つ）</label>
+  <textarea id="target_domains" name="target_domains" rows="2" placeholder="example.com">{{ settings.target_domains }}</textarea>
+  <p class="muted">例：<code>example.com</code> と書くと <code>www.example.com</code> などのサブドメインも対象になります。</p>
+
+  <label for="tag_selector">タグ要素のCSSセレクタ</label>
+  <input type="text" id="tag_selector" name="tag_selector" value="{{ settings.tag_selector }}" placeholder="例：.article-tags a" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <p class="muted">
+    一致した要素の文字がタグになります（先頭の # は自動で取り除きます）。
+    <code>meta[name="keywords"]</code> のように meta 要素を指定した場合は、content の値をカンマで区切ってタグにします。
+  </p>
+
+  <label for="fetch_interval">取得の間隔（秒）</label>
+  <input type="number" id="fetch_interval" name="fetch_interval" value="{{ settings.fetch_interval }}" min="1" max="60" step="0.5">
+  <p class="muted">複数URLをまとめて登録したとき、1件ごとにこの秒数だけ待ってから次を取得します（相手サイトへの負荷対策）。</p>
+
+  <button type="submit">設定を保存</button>
+</form>
+
+<h2 id="test">タグ抽出のテスト</h2>
+<form class="card" method="post" action="{{ url_for('settings_test') }}#test">
+  <p class="muted">URLを1件入力して、タグが正しく取れるか試せます。結果は表示するだけで、保存はされません。</p>
+  <label for="test_url">試すURL</label>
+  <input type="url" id="test_url" name="test_url" value="{{ test_url }}" placeholder="https://example.com/articles/123" required>
+  <label for="test_selector">試すCSSセレクタ（保存済みの値が入っています。書き換えて試せます）</label>
+  <input type="text" id="test_selector" name="test_selector" value="{{ test_selector }}" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button type="submit">テストする</button>
+</form>
+
+{% if test %}
+  <section class="card test-result">
+    <h3>テスト結果</h3>
+    {% if test.warning %}<p class="flash flash-error">{{ test.warning }}</p>{% endif %}
+    {% if test.error %}
+      <p class="flash flash-error">{{ test.error }}</p>
+    {% else %}
+      <dl>
+        <dt>ページタイトル</dt><dd>{{ test.title or '（取得できませんでした）' }}</dd>
+        <dt>セレクタに一致した要素</dt><dd>{{ test.matched }} 個</dd>
+        <dt>抽出したタグ（{{ test.tags|length }} 件）</dt>
+        <dd>
+          {% if test.tags %}
+            <div class="chips">{% for t in test.tags %}<span class="chip">{{ t }}</span>{% endfor %}</div>
+          {% else %}
+            <p class="error-text">タグが見つかりませんでした。</p>
+            <ul class="hints">
+              <li>セレクタが実際のページと合っているか、開発者ツールで確認してください。</li>
+              <li>ブラウザで「ページのソースを表示」し、タグの文字が含まれていなければ、タグは JavaScript で後から表示されています（このアプリでは取得できません。README参照）。</li>
+            </ul>
+          {% endif %}
+        </dd>
+      </dl>
+      {% if test.tags and test_selector != settings.tag_selector %}
+        <p class="muted">このセレクタを使うには、上の「タグ要素のCSSセレクタ」に <code>{{ test_selector }}</code> を入力して保存してください。</p>
+      {% endif %}
+    {% endif %}
+  </section>
+{% endif %}
+
+<h2>バックアップ</h2>
+<div class="card">
+  <p>全データをCSVファイル（Excelで開けます）として保存します。</p>
+  <a class="button" href="{{ url_for('export_csv') }}">CSVをダウンロード</a>
+  <p class="muted">データベースそのもの（アプリのフォルダにある <code>tagclip.db</code>）をコピーしておくと、完全なバックアップになります。</p>
+</div>
+
+{% endblock %}
