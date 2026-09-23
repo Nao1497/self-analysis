@@ -1,4 +1,5 @@
 """ページの取得とタグの抽出を行うファイル。"""
+import os
 import threading
 import time
 from urllib.parse import urlsplit, urlunsplit
@@ -127,9 +128,102 @@ def clean_tags(texts):
     return tags
 
 
-def fetch_tags(url, selector, interval=0):
-    """URLを取得してタグを抽出する。戻り値：(タイトル, タグのリスト, 一致した要素数)"""
+RENDER_WAIT = 15  # JavaScriptでタグが表示されるのを待つ最大秒数
+
+# タグ（セレクタに一致し、文字が入っている要素）が表示されたらtrueを返すJavaScript
+_TAGS_READY_JS = """(sel) => {
+  try {
+    return Array.from(document.querySelectorAll(sel)).some(
+      (e) => ((e.tagName === "META" ? e.content : e.textContent) || "").trim() !== "");
+  } catch (err) { return true; }
+}"""
+_browser_lock = threading.Lock()
+
+
+def _launch_browser(p):
+    """付属のChromium → Edge → Chrome の順に、起動できるブラウザを使う。
+
+    環境変数 TAGCLIP_BROWSER_PATH にブラウザの実行ファイルを指定すると、それを最優先で使う。
+    """
+    candidates = [{}, {"channel": "msedge"}, {"channel": "chrome"}]
+    if os.environ.get("TAGCLIP_BROWSER_PATH"):
+        candidates.insert(0, {"executable_path": os.environ["TAGCLIP_BROWSER_PATH"]})
+    first_error = None
+    for options in candidates:
+        try:
+            return p.chromium.launch(headless=True, **options)
+        except Exception as e:
+            first_error = first_error or e
+    reason = str(first_error).strip().splitlines()[0] if first_error else ""
+    raise FetchError(
+        "JavaScript実行用のブラウザを起動できませんでした。"
+        "起動ファイルからアプリを起動し直してください（README「困ったときは」参照）"
+        + (f"［詳細：{reason[:200]}］" if reason else "")
+    )
+
+
+def fetch_rendered_html(url, selector, interval=0):
+    """見えないブラウザでページを開き、JavaScriptの実行後のHTMLを返す。"""
+    try:
+        from playwright.sync_api import Error as PlaywrightError, sync_playwright
+    except ImportError:
+        raise FetchError("Playwrightが入っていません。起動ファイルからアプリを起動し直してください")
+
+    _wait_politely(interval)
+    with _browser_lock:  # ブラウザは1つずつ動かす
+        try:
+            with sync_playwright() as p:
+                browser = _launch_browser(p)
+                try:
+                    page = browser.new_page(user_agent=USER_AGENT, locale="ja-JP")
+                    # 画像・動画・フォントは読み込まない（速くするため）
+                    page.route("**/*", lambda route: route.abort()
+                               if route.request.resource_type in ("image", "media", "font")
+                               else route.continue_())
+                    try:
+                        res = page.goto(url, wait_until="domcontentloaded", timeout=TIMEOUT * 1000)
+                    except PlaywrightError as e:
+                        if "Timeout" in str(e):
+                            raise FetchError(f"タイムアウトしました（{TIMEOUT}秒以内に表示されません）")
+                        raise FetchError("接続できませんでした（URLの誤り、またはネットワークの問題）")
+                    if res is not None and res.status >= 400:
+                        raise FetchError(f"ページを取得できませんでした（HTTPステータス {res.status}）")
+                    try:
+                        page.wait_for_function(_TAGS_READY_JS, arg=selector, timeout=RENDER_WAIT * 1000)
+                        page.wait_for_timeout(500)  # タグが続けて追加される場合に備えて少し待つ
+                    except PlaywrightError:
+                        pass  # 待ってもタグが出なかった → この時点の内容で判定する
+                    return page.content()
+                finally:
+                    browser.close()
+        except FetchError:
+            raise
+        except Exception as e:
+            raise FetchError(f"ブラウザでの取得に失敗しました：{e}")
+
+
+def fetch_tags(url, selector, interval=0, use_browser=False):
+    """URLを取得してタグを抽出する。戻り値：(タイトル, タグのリスト, 一致した要素数)
+
+    use_browser=True のときは、JavaScriptを実行した後のページから抽出する。
+    """
     if not selector.strip():
         raise FetchError("タグのCSSセレクタが設定されていません（設定画面で設定してください）")
-    html = fetch_html(url, interval)
+    if use_browser:
+        html = fetch_rendered_html(url, selector, interval)
+    else:
+        html = fetch_html(url, interval)
     return extract(html, selector)
+
+
+def empty_tags_hint(matched, use_browser):
+    """タグが0件だったときの原因の目安。"""
+    if use_browser:
+        if matched:
+            return "セレクタに一致する要素はありましたが、中身が空でした。セレクタが指す場所を確認してください"
+        return "セレクタに一致する要素がありませんでした。セレクタが合っているか確認してください"
+    if matched:
+        return ("セレクタに一致する要素はありましたが、中身が空でした。"
+                "タグがJavaScriptで後から表示されるサイトです。設定の「JavaScriptを実行して取得する」をオンにしてください")
+    return ("セレクタに一致する要素がありませんでした。セレクタが合っていないか、"
+            "タグがJavaScriptで後から表示されるサイトの可能性があります")

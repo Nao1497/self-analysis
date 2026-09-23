@@ -56,13 +56,12 @@ class FetchWorker:
 
         title, tags, error = article["title"], [], ""
         try:
-            title, tags, matched = scraper.fetch_tags(article["url"], settings["tag_selector"], interval)
+            use_browser = settings.get("use_browser") == "1"
+            title, tags, matched = scraper.fetch_tags(
+                article["url"], settings["tag_selector"], interval, use_browser
+            )
             if not tags:
-                error = (
-                    "タグが0件でした（セレクタに一致する要素が"
-                    f"{matched}件）。セレクタが合っていないか、"
-                    "タグがJavaScriptで後から表示されるサイトの可能性があります"
-                )
+                error = "タグが0件でした。" + scraper.empty_tags_hint(matched, use_browser)
         except scraper.FetchError as e:
             error = str(e)
         except Exception as e:  # 想定外のエラーも記録して次へ進む

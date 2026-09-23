@@ -171,6 +171,7 @@ def settings():
         domains = scraper.parse_domains(request.form.get("target_domains", ""))
         selector = request.form.get("tag_selector", "").strip()
         interval = request.form.get("fetch_interval", "3").strip()
+        use_browser = "1" if request.form.get("use_browser") else "0"
 
         errors = []
         if not domains:
@@ -190,15 +191,18 @@ def settings():
             for e in errors:
                 flash(e, "error")
             current = {"target_domains": request.form.get("target_domains", ""),
-                       "tag_selector": selector, "fetch_interval": interval}
+                       "tag_selector": selector, "fetch_interval": interval,
+                       "use_browser": use_browser}
         else:
             database.save_settings({"target_domains": "\n".join(domains),
-                                    "tag_selector": selector, "fetch_interval": interval})
+                                    "tag_selector": selector, "fetch_interval": interval,
+                                    "use_browser": use_browser})
             flash("設定を保存しました。", "success")
             return redirect(url_for("settings"))
 
     return render_template("settings.html", settings=current, test=None,
-                           test_url="", test_selector=current["tag_selector"])
+                           test_url="", test_selector=current["tag_selector"],
+                           test_use_browser=current["use_browser"] == "1")
 
 
 @app.route("/settings/test", methods=["POST"])
@@ -207,7 +211,8 @@ def settings_test():
     current = database.get_settings()
     test_url = request.form.get("test_url", "").strip()
     test_selector = request.form.get("test_selector", "").strip()
-    test = {"url": test_url, "error": None, "title": "", "tags": [], "matched": 0, "warning": None}
+    test_use_browser = bool(request.form.get("test_use_browser"))
+    test = {"url": test_url, "error": None, "title": "", "tags": [], "matched": 0, "warning": None, "hint": None}
 
     url = scraper.normalize_url(test_url)
     if not url:
@@ -217,12 +222,16 @@ def settings_test():
         if domains and not scraper.is_target_domain(url, domains):
             test["warning"] = "このURLは対象ドメイン外です（テストは実行しますが、登録はできません）"
         try:
-            test["title"], test["tags"], test["matched"] = scraper.fetch_tags(url, test_selector, interval=1)
+            test["title"], test["tags"], test["matched"] = scraper.fetch_tags(
+                url, test_selector, interval=1, use_browser=test_use_browser)
+            if not test["tags"]:
+                test["hint"] = scraper.empty_tags_hint(test["matched"], test_use_browser)
         except scraper.FetchError as e:
             test["error"] = str(e)
 
     return render_template("settings.html", settings=current, test=test,
-                           test_url=test_url, test_selector=test_selector)
+                           test_url=test_url, test_selector=test_selector,
+                           test_use_browser=test_use_browser)
 
 
 # ---------------------------------------------------------------- 記事の編集・削除・再取得

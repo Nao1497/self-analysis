@@ -13,6 +13,7 @@ DEFAULT_SETTINGS = {
     "target_domains": "",   # 対象ドメイン（改行区切りで複数可）
     "tag_selector": "",     # タグ要素を指定するCSSセレクタ
     "fetch_interval": "3",  # 複数URLを取得するときの間隔（秒）
+    "use_browser": "0",     # 1ならJavaScriptを実行してから取得する
 }
 
 SCHEMA = """

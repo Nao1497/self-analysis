@@ -20,6 +20,15 @@
   <input type="number" id="fetch_interval" name="fetch_interval" value="{{ settings.fetch_interval }}" min="1" max="60" step="0.5">
   <p class="muted">複数URLをまとめて登録したとき、1件ごとにこの秒数だけ待ってから次を取得します（相手サイトへの負荷対策）。</p>
 
+  <label class="check">
+    <input type="checkbox" name="use_browser" value="1" {{ 'checked' if settings.use_browser == '1' }}>
+    JavaScriptを実行して取得する
+  </label>
+  <p class="muted">
+    タグがJavaScriptで後から表示されるサイト用です。見えないブラウザでページを開き、表示し終わった状態からタグを取り出します。
+    1件ごとに数秒余分にかかるので、普通に取れるサイトではオフのままにしてください。
+  </p>
+
   <button type="submit">設定を保存</button>
 </form>
 
@@ -30,6 +39,10 @@
   <input type="url" id="test_url" name="test_url" value="{{ test_url }}" placeholder="https://example.com/articles/123" required>
   <label for="test_selector">試すCSSセレクタ（保存済みの値が入っています。書き換えて試せます）</label>
   <input type="text" id="test_selector" name="test_selector" value="{{ test_selector }}" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label class="check">
+    <input type="checkbox" name="test_use_browser" value="1" {{ 'checked' if test_use_browser }}>
+    JavaScriptを実行して試す
+  </label>
   <button type="submit">テストする</button>
 </form>
 
@@ -48,16 +61,16 @@
           {% if test.tags %}
             <div class="chips">{% for t in test.tags %}<span class="chip">{{ t }}</span>{% endfor %}</div>
           {% else %}
-            <p class="error-text">タグが見つかりませんでした。</p>
-            <ul class="hints">
-              <li>セレクタが実際のページと合っているか、開発者ツールで確認してください。</li>
-              <li>ブラウザで「ページのソースを表示」し、タグの文字が含まれていなければ、タグは JavaScript で後から表示されています（このアプリでは取得できません。README参照）。</li>
-            </ul>
+            <p class="error-text">タグが見つかりませんでした。{{ test.hint }}</p>
+            <p class="muted">詳しい調べ方は README の8章・9章を参照してください。</p>
           {% endif %}
         </dd>
       </dl>
       {% if test.tags and test_selector != settings.tag_selector %}
         <p class="muted">このセレクタを使うには、上の「タグ要素のCSSセレクタ」に <code>{{ test_selector }}</code> を入力して保存してください。</p>
+      {% endif %}
+      {% if test.tags and test_use_browser and settings.use_browser != '1' %}
+        <p class="muted">登録時もこの方法で取得するには、上の「JavaScriptを実行して取得する」をオンにして保存してください。</p>
       {% endif %}
     {% endif %}
   </section>

@@ -192,3 +192,7 @@ dd { margin: 0.1rem 0 0; }
 .card > :first-child,
 .card > input[type=hidden]:first-child + * { margin-top: 0; }
 .card > :last-child { margin-bottom: 0; }
+
+/* チェックボックス付きの項目 */
+label.check { display: flex; gap: 0.5rem; align-items: center; font-weight: 600; }
+label.check input { width: 1.2rem; height: 1.2rem; margin: 0; }
