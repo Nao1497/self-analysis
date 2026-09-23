@@ -343,7 +343,8 @@ def article(article_id):
         back = ref.path + ("?" + ref.query if ref.query else "")
     if not back.startswith("/") or back.startswith("//") or back.startswith("/article/"):
         back = "/"
-    return render_template("article.html", article=item, back=back)
+    return render_template("article.html", article=item, back=back,
+                           tag_names=mark_tag_choices()["tag_names"])
 
 
 @app.route("/article/<int:article_id>/delete", methods=["POST"])

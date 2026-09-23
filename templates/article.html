@@ -27,17 +27,40 @@
   <label for="memo">メモ</label>
   <textarea id="memo" name="memo" rows="3">{{ article.memo }}</textarea>
 
-  <label for="tags">タグ（1行に1つ）</label>
-  {% if article.tags %}
-    <div class="chips">{% for t in article.tags %}<span class="chip {{ mark_class(t) }}">{{ t }}</span>{% endfor %}</div>
-  {% endif %}
-  <textarea id="tags" name="tags" rows="{{ [article.tags|length + 2, 5]|max }}" autocapitalize="off">{{ article.tags|join('\n') }}</textarea>
-  <p class="muted">
-    行を追加するとタグの追加、書き換えると修正、行を消すと削除になります。
-    先頭に <span class="mark-sample mark-star">★</span> か <span class="mark-sample mark-hollow">☆</span> を付けると、色分けされた「自分で付けるタグ」になります（ページから再取得しても残ります）。
-  </p>
+  <label>タグ</label>
+  <div id="tag-editor" class="tag-editor">
+    <p class="muted">タグをタップ → ★ / ☆ / 印なし を選ぶ → 最後に「変更を保存」。</p>
+    <div class="chips" id="edit-chips"></div>
+    <p class="muted" id="edit-empty" hidden>タグがありません。</p>
 
-  <button type="submit">保存する</button>
+    <div class="tag-action" id="tag-action" hidden>
+      <div class="tag-action-head">「<span id="action-name"></span>」を</div>
+      <div class="tag-action-buttons">
+        <button type="button" class="mark-star" data-set="★">★ を付ける</button>
+        <button type="button" class="mark-hollow" data-set="☆">☆ を付ける</button>
+        <button type="button" class="secondary" data-set="">印なし</button>
+        <button type="button" class="danger" data-set="delete">削除</button>
+        <button type="button" class="plain" data-set="cancel">閉じる</button>
+      </div>
+    </div>
+
+    <div class="row add-mark">
+      <input type="text" id="edit-add-input" list="edit-tag-names" placeholder="タグを追加" autocomplete="off" enterkeyhint="done">
+      <button type="button" id="edit-add" class="small">追加</button>
+    </div>
+    <datalist id="edit-tag-names">
+      {% for n in tag_names %}<option value="{{ n }}">{% endfor %}
+    </datalist>
+    <p class="notice" id="edit-dirty" hidden>変更はまだ保存されていません。</p>
+  </div>
+
+  <details class="text-edit">
+    <summary>テキストでまとめて編集</summary>
+    <textarea id="tags" name="tags" rows="{{ [article.tags|length + 2, 5]|max }}" autocapitalize="off">{{ article.tags|join('\n') }}</textarea>
+    <p class="muted">1行に1つ。先頭に ★ か ☆ を付けると「自分で付けるタグ」になります。</p>
+  </details>
+
+  <button type="submit">変更を保存</button>
 </form>
 
 <div class="card danger-zone">

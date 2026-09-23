@@ -179,7 +179,10 @@ def save_fetch_result(article_id, title, tags, error_message):
         )
         # 自分で付けた★☆タグは残し、ページから取ったタグだけを入れ替える
         marked = [t for t in _tags_for(conn, [article_id]).get(article_id, []) if is_marked(t)]
-        _replace_tags(conn, article_id, marked + [t for t in tags if not is_marked(t)])
+        # ★☆を付けたタグと同じ名前のページのタグは、重ねて付けない（例：★Python があれば Python は省く）
+        marked_names = {t[1:].strip().lower() for t in marked}
+        page_tags = [t for t in tags if not is_marked(t) and t.lower() not in marked_names]
+        _replace_tags(conn, article_id, marked + page_tags)
 
 
 def update_article(article_id, title, memo, tags):

@@ -155,3 +155,92 @@ document.querySelectorAll(".mark-toggle").forEach((group) => {
     }
   }, 3000);
 })();
+
+// 編集画面：タグをタップ → ★ / ☆ / 印なし / 削除 を選ぶ
+(function tagEditor() {
+  const editor = document.getElementById("tag-editor");
+  const textarea = document.getElementById("tags");
+  if (!editor || !textarea) return;
+  const chips = document.getElementById("edit-chips");
+  const empty = document.getElementById("edit-empty");
+  const action = document.getElementById("tag-action");
+  const actionName = document.getElementById("action-name");
+  const dirty = document.getElementById("edit-dirty");
+  const addInput = document.getElementById("edit-add-input");
+  let tags = [];
+  let current = -1; // タップ中のタグの番号
+
+  const baseName = (t) => t.replace(/^[★☆]\s*/, "");
+  const markClass = (t) => (t.startsWith("★") ? "mark-star" : t.startsWith("☆") ? "mark-hollow" : "");
+  const read = () => textarea.value.split("\n").map((t) => t.trim()).filter(Boolean);
+  const write = () => {
+    textarea.value = tags.join("\n");
+    dirty.hidden = false;
+  };
+
+  function render() {
+    chips.innerHTML = "";
+    tags.forEach((t, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `chip tag-btn ${markClass(t)}` + (i === current ? " is-current" : "");
+      b.textContent = t;
+      b.setAttribute("aria-pressed", i === current);
+      b.addEventListener("click", () => open(i));
+      chips.appendChild(b);
+    });
+    empty.hidden = tags.length > 0;
+    action.hidden = current < 0;
+    if (current >= 0) actionName.textContent = tags[current];
+  }
+
+  function open(i) {
+    current = current === i ? -1 : i;
+    render();
+    if (current >= 0) action.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function apply(set) {
+    if (current < 0) return;
+    if (set === "delete") {
+      tags.splice(current, 1);
+    } else if (set !== "cancel") {
+      const target = tags[current];
+      const base = baseName(target).toLowerCase();
+      // 同じ名前のタグ（印だけ違うもの）がほかにあれば、重ならないようにそちらを外す
+      tags = tags.filter((t, i) => i === current || baseName(t).toLowerCase() !== base);
+      tags[tags.indexOf(target)] = set + baseName(target);
+    }
+    if (set !== "cancel") write();
+    current = -1;
+    render();
+  }
+
+  action.querySelectorAll("button[data-set]").forEach((b) => {
+    b.addEventListener("click", () => apply(b.dataset.set));
+  });
+
+  function addTyped() {
+    addInput.value.split(/[,、，]/).map((t) => t.trim()).filter(Boolean).forEach((t) => {
+      if (!tags.some((x) => x.toLowerCase() === t.toLowerCase())) tags.push(t);
+    });
+    addInput.value = "";
+    write();
+    render();
+  }
+  document.getElementById("edit-add").addEventListener("click", addTyped);
+  addInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); addTyped(); }
+  });
+
+  // テキストで直接編集したときも表示を合わせる
+  textarea.addEventListener("input", () => {
+    tags = read();
+    current = -1;
+    dirty.hidden = false;
+    render();
+  });
+
+  tags = read();
+  render();
+})();
