@@ -3,7 +3,7 @@
 
 <form class="card search" method="get" action="{{ url_for('index') }}">
   <div class="row">
-    <input type="search" name="q" value="{{ filters.q }}" placeholder="タイトルで検索">
+    <input type="search" name="q" value="{{ filters.q }}" placeholder="タイトル・メモで検索">
     <button type="submit">検索</button>
   </div>
 
@@ -38,7 +38,7 @@
         {% for name, cnt in all_tags %}
           <label class="tag-check" data-name="{{ name|lower }}">
             <input type="checkbox" name="tag" value="{{ name }}" {{ 'checked' if name|lower in selected }}>
-            <span>{{ name }}<small>{{ cnt }}</small></span>
+            <span class="{{ mark_class(name) }}">{{ name }}<small>{{ cnt }}</small></span>
           </label>
         {% endfor %}
       </div>
@@ -98,10 +98,11 @@
         <a class="edit" href="{{ url_for('article', article_id=a.id, next=request.full_path) }}">編集</a>
       </div>
       {% if a.status == 'error' %}<p class="error-text">{{ a.error_message }}</p>{% endif %}
+      {% if a.memo %}<p class="memo">{{ a.memo }}</p>{% endif %}
       {% if a.tags %}
         <div class="chips">
           {% for t in a.tags %}
-            <a class="chip" href="{{ url_for('index', tag=t) }}">{{ t }}</a>
+            <a class="chip {{ mark_class(t) }}" href="{{ url_for('index', tag=t) }}">{{ t }}</a>
           {% endfor %}
         </div>
       {% endif %}

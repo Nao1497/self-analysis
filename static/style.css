@@ -196,3 +196,32 @@ dd { margin: 0.1rem 0 0; }
 /* チェックボックス付きの項目 */
 label.check { display: flex; gap: 0.5rem; align-items: center; font-weight: 600; }
 label.check input { width: 1.2rem; height: 1.2rem; margin: 0; }
+
+/* 自分で付けるタグ（★＝黄色系、☆＝青緑系） */
+:root {
+  --star-bg: #fef3c7; --star-text: #92400e;
+  --hollow-bg: #ccfbf1; --hollow-text: #115e59;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --star-bg: #3d2e0a; --star-text: #fcd34d;
+    --hollow-bg: #0f302c; --hollow-text: #5eead4;
+  }
+}
+.chip.mark-star, .tag-check span.mark-star { background: var(--star-bg); color: var(--star-text); font-weight: 600; }
+.chip.mark-hollow, .tag-check span.mark-hollow { background: var(--hollow-bg); color: var(--hollow-text); font-weight: 600; }
+.tag-check input:checked + span.mark-star,
+.tag-check input:checked + span.mark-hollow { background: var(--accent); color: var(--accent-text); }
+.mark-sample { display: inline-block; padding: 0 0.35rem; border-radius: 6px; }
+.mark-sample.mark-star { background: var(--star-bg); color: var(--star-text); }
+.mark-sample.mark-hollow { background: var(--hollow-bg); color: var(--hollow-text); }
+
+fieldset.mark-box { border: 1px solid var(--border); border-radius: 8px; margin: 0.75rem 0 0; padding: 0.5rem 0.75rem 0.75rem; }
+fieldset.mark-box legend { font-weight: 600; padding: 0 0.25rem; }
+fieldset.mark-box > p { margin: 0 0 0.25rem; }
+
+/* メモ */
+.memo {
+  margin: 0.4rem 0 0; padding: 0.3rem 0.6rem; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-size: 0.9rem; background: var(--bg); border-left: 3px solid var(--border); border-radius: 4px;
+}

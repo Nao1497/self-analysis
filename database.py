@@ -50,6 +50,13 @@ CREATE INDEX IF NOT EXISTS idx_article_tags_tag ON article_tags(tag_id);
 
 PER_PAGE = 50
 
+# 登録時などに自分で付けるタグの印。ページから取り直しても消えずに残る
+MARKS = ("★", "☆")
+
+
+def is_marked(tag):
+    return tag[:1] in MARKS
+
 
 def now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -65,6 +72,10 @@ def connect():
 def init_db():
     with connect() as conn:
         conn.executescript(SCHEMA)
+        # 以前のバージョンで作ったデータベースに「メモ」の列を追加する
+        columns = [r["name"] for r in conn.execute("PRAGMA table_info(articles)")]
+        if "memo" not in columns:
+            conn.execute("ALTER TABLE articles ADD COLUMN memo TEXT NOT NULL DEFAULT ''")
         for key, value in DEFAULT_SETTINGS.items():
             conn.execute(
                 "INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)", (key, value)
@@ -98,12 +109,14 @@ def url_exists(url):
         return conn.execute("SELECT 1 FROM articles WHERE url = ?", (url,)).fetchone() is not None
 
 
-def add_article(url):
-    """記事を「取得待ち」として登録し、IDを返す。"""
+def add_article(url, memo="", tags=()):
+    """記事を「取得待ち」として登録し、IDを返す。tags は登録時に選んだ★☆タグ。"""
     with connect() as conn:
         cur = conn.execute(
-            "INSERT INTO articles(url, created_at) VALUES (?, ?)", (url, now_str())
+            "INSERT INTO articles(url, memo, created_at) VALUES (?, ?, ?)", (url, memo, now_str())
         )
+        if tags:
+            _replace_tags(conn, cur.lastrowid, list(tags))
         return cur.lastrowid
 
 
@@ -150,13 +163,15 @@ def save_fetch_result(article_id, title, tags, error_message):
             "UPDATE articles SET title = ?, status = ?, error_message = ?, fetched_at = ? WHERE id = ?",
             (title, status, error_message, now_str(), article_id),
         )
-        _replace_tags(conn, article_id, tags)
+        # 自分で付けた★☆タグは残し、ページから取ったタグだけを入れ替える
+        marked = [t for t in _tags_for(conn, [article_id]).get(article_id, []) if is_marked(t)]
+        _replace_tags(conn, article_id, marked + [t for t in tags if not is_marked(t)])
 
 
-def update_article(article_id, title, tags):
+def update_article(article_id, title, memo, tags):
     """手動編集の保存。タグが1件以上あればエラー状態も解除する。"""
     with connect() as conn:
-        conn.execute("UPDATE articles SET title = ? WHERE id = ?", (title, article_id))
+        conn.execute("UPDATE articles SET title = ?, memo = ? WHERE id = ?", (title, memo, article_id))
         if tags:
             conn.execute(
                 "UPDATE articles SET status = 'ok', error_message = '' "
@@ -233,10 +248,11 @@ def search_articles(tags=(), mode="and", keyword="", status="", sort="new", page
             params.extend(tags)
             params.append(len(tags))
 
-    # スペース区切りのキーワードはすべて含むもの（AND）を探す
+    # スペース区切りのキーワードはすべて含むもの（AND）を、タイトルとメモから探す
     for word in keyword.split():
-        where.append("a.title LIKE ? ESCAPE '\\'")
-        params.append(f"%{_escape_like(word)}%")
+        where.append("(a.title LIKE ? ESCAPE '\\' OR a.memo LIKE ? ESCAPE '\\')")
+        pattern = f"%{_escape_like(word)}%"
+        params.extend([pattern, pattern])
 
     if status in ("ok", "error", "pending"):
         where.append("a.status = ?")
@@ -267,7 +283,9 @@ def tag_counts(order="count"):
                 JOIN article_tags at ON at.tag_id = t.id
                 GROUP BY t.id ORDER BY {order_sql}"""
         ).fetchall()
-    return [(r["name"], r["cnt"]) for r in rows]
+    result = [(r["name"], r["cnt"]) for r in rows]
+    # ★ → ☆ → その他 の順に並べる（それぞれの中の順番はそのまま）
+    return sorted(result, key=lambda x: MARKS.index(x[0][0]) if is_marked(x[0]) else len(MARKS))
 
 
 def status_counts():

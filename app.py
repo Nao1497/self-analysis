@@ -28,6 +28,14 @@ app = Flask(__name__)
 app.secret_key = "tagclip-local-only"  # 画面上のお知らせ表示（flash）に使うだけ
 
 
+def mark_class(tag):
+    """★☆タグを色分けするためのCSSクラス名。"""
+    return {"★": "mark-star", "☆": "mark-hollow"}.get(tag[:1], "")
+
+
+app.jinja_env.globals["mark_class"] = mark_class
+
+
 @app.context_processor
 def common_values():
     return {"counts": database.status_counts(), "status_labels": STATUS_LABELS}
@@ -105,17 +113,42 @@ def tags():
 URL_IN_TEXT = re.compile(r"https?://\S+")
 
 
+def marked_tags(text, mark):
+    """カンマ・読点・改行区切りで入力したタグの先頭に印（★ か ☆）を付ける。"""
+    names = re.split(r"[,、，\n]", text)
+    names = [n.strip().lstrip("★☆#＃").strip() for n in names]
+    return [mark + n for n in names if n]
+
+
+def clean_memo(text):
+    return "\n".join(line.rstrip() for line in text.strip().splitlines())
+
+
 @app.route("/add", methods=["GET", "POST"])
 def add():
     settings = database.get_settings()
     domains = scraper.parse_domains(settings["target_domains"])
-    results, text = [], ""
+    results, text, memo = [], "", ""
+    form = {"chosen": [], "new_star": "", "new_hollow": ""}
 
     if request.method == "POST":
         text = request.form.get("urls", "")
+        memo = clean_memo(request.form.get("memo", ""))
+        form = {
+            "chosen": request.form.getlist("mark_tag"),
+            "new_star": request.form.get("new_star", ""),
+            "new_hollow": request.form.get("new_hollow", ""),
+        }
+        # 選んだ★☆タグ ＋ 新しく入力した★☆タグ（重複はまとめる）
+        user_tags = scraper.clean_tags(
+            [t for t in form["chosen"] if database.is_marked(t)]
+            + marked_tags(form["new_star"], "★")
+            + marked_tags(form["new_hollow"], "☆")
+        )
         if not domains:
             flash("先に「設定」画面で対象ドメインを設定してください。", "error")
-            return render_template("add.html", domains=domains, results=[], text=text)
+            return render_template("add.html", domains=domains, results=[], text=text, memo=memo,
+                                   form=form, mark_tags=mark_tag_choices())
 
         seen, new_ids = set(), []
         for line in text.splitlines():
@@ -134,24 +167,30 @@ def add():
                 results.append({"url": url, "ok": False, "reason": "登録済みのURLです"})
             else:
                 try:
-                    new_ids.append(database.add_article(url))
+                    new_ids.append(database.add_article(url, memo, user_tags))
                     results.append({"url": url, "ok": True, "reason": "登録しました（タグ取得待ち）"})
                 except sqlite3.IntegrityError:
                     results.append({"url": url, "ok": False, "reason": "登録済みのURLです"})
             seen.add(url)
 
         worker.enqueue(new_ids)
-        if new_ids:
-            text = ""  # 登録できたときは入力欄を空にする
+        if new_ids:  # 登録できたときは入力欄を空にする
+            text, memo = "", ""
+            form = {"chosen": [], "new_star": "", "new_hollow": ""}
         if not results:
             flash("URLが入力されていません。", "error")
 
     added = sum(1 for r in results if r["ok"])
     return render_template(
-        "add.html", domains=domains, results=results, text=text,
-        added=added, skipped=len(results) - added,
+        "add.html", domains=domains, results=results, text=text, memo=memo, form=form,
+        mark_tags=mark_tag_choices(), added=added, skipped=len(results) - added,
         selector_missing=not settings["tag_selector"].strip(),
     )
+
+
+def mark_tag_choices():
+    """登録画面で選べる★☆タグ（これまでに使ったもの）。"""
+    return [(name, cnt) for name, cnt in database.tag_counts() if database.is_marked(name)]
 
 
 # ---------------------------------------------------------------- 設定
@@ -243,8 +282,9 @@ def article(article_id):
         abort(404)
     if request.method == "POST":
         title = " ".join(request.form.get("title", "").split())
+        memo = clean_memo(request.form.get("memo", ""))
         tags = scraper.clean_tags(request.form.get("tags", "").splitlines())
-        database.update_article(article_id, title, tags)
+        database.update_article(article_id, title, memo, tags)
         flash("保存しました。", "success")
         return redirect(safe_next(url_for("article", article_id=article_id)))
     # 「一覧に戻る」の行き先（検索条件を保ったまま戻れるようにする）
@@ -290,10 +330,10 @@ def export_csv():
     buf = io.StringIO()
     buf.write("﻿")  # Excelで文字化けしないようにする印（BOM）
     writer = csv.writer(buf)
-    writer.writerow(["ID", "URL", "タイトル", "タグ", "状態", "エラー内容", "登録日時", "最終取得日時"])
+    writer.writerow(["ID", "URL", "タイトル", "タグ", "メモ", "状態", "エラー内容", "登録日時", "最終取得日時"])
     for a in database.all_articles_for_export():
         writer.writerow([
-            a["id"], a["url"], a["title"], " | ".join(a["tags"]),
+            a["id"], a["url"], a["title"], " | ".join(a["tags"]), a["memo"],
             STATUS_LABELS.get(a["status"], a["status"]), a["error_message"],
             a["created_at"], a["fetched_at"] or "",
         ])

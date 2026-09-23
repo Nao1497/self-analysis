@@ -34,6 +34,30 @@
   {% if domains %}
     <p class="muted">対象ドメイン：{{ domains|join('、') }}（サブドメインを含む）</p>
   {% endif %}
+
+  <label for="memo">メモ（任意）</label>
+  <textarea id="memo" name="memo" rows="3" placeholder="この記事についてのメモ">{{ memo }}</textarea>
+
+  <fieldset class="mark-box">
+    <legend>自分で付けるタグ（任意）</legend>
+    <p class="muted">ページから取るタグとは別に、★や☆を付けたタグを付けられます。色分けして表示し、ページから取り直しても消えません。</p>
+    {% if mark_tags %}
+      <div class="tag-checks">
+        {% for name, cnt in mark_tags %}
+          <label class="tag-check">
+            <input type="checkbox" name="mark_tag" value="{{ name }}" {{ 'checked' if name in form.chosen }}>
+            <span class="{{ mark_class(name) }}">{{ name }}<small>{{ cnt }}</small></span>
+          </label>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <label for="new_star"><span class="mark-sample mark-star">★</span> を付けて新しく追加</label>
+    <input type="text" id="new_star" name="new_star" value="{{ form.new_star }}" placeholder="例：お気に入り、あとで読む（カンマか「、」で区切る）">
+    <label for="new_hollow"><span class="mark-sample mark-hollow">☆</span> を付けて新しく追加</label>
+    <input type="text" id="new_hollow" name="new_hollow" value="{{ form.new_hollow }}" placeholder="例：保留、参考">
+  </fieldset>
+  <p class="muted">メモと自分で付けるタグは、このとき登録するすべてのURLに付きます。</p>
+
   <button type="submit">登録する</button>
 </form>
 

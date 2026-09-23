@@ -24,16 +24,25 @@
   <label for="title">タイトル</label>
   <input type="text" id="title" name="title" value="{{ article.title }}">
 
+  <label for="memo">メモ</label>
+  <textarea id="memo" name="memo" rows="3">{{ article.memo }}</textarea>
+
   <label for="tags">タグ（1行に1つ）</label>
+  {% if article.tags %}
+    <div class="chips">{% for t in article.tags %}<span class="chip {{ mark_class(t) }}">{{ t }}</span>{% endfor %}</div>
+  {% endif %}
   <textarea id="tags" name="tags" rows="{{ [article.tags|length + 2, 5]|max }}" autocapitalize="off">{{ article.tags|join('\n') }}</textarea>
-  <p class="muted">行を追加するとタグの追加、書き換えると修正、行を消すと削除になります。</p>
+  <p class="muted">
+    行を追加するとタグの追加、書き換えると修正、行を消すと削除になります。
+    先頭に <span class="mark-sample mark-star">★</span> か <span class="mark-sample mark-hollow">☆</span> を付けると、色分けされた「自分で付けるタグ」になります（ページから再取得しても残ります）。
+  </p>
 
   <button type="submit">保存する</button>
 </form>
 
 <div class="card danger-zone">
   <form method="post" action="{{ url_for('refetch', article_id=article.id) }}"
-        onsubmit="return confirm('ページからタグを取得し直します。手動で編集したタグは上書きされます。よろしいですか？')">
+        onsubmit="return confirm('ページからタグを取得し直します。ページから取ったタグは取り直した内容に置き換わります（★☆のタグとメモは残ります）。よろしいですか？')">
     <input type="hidden" name="next" value="{{ url_for('article', article_id=article.id, next=back) }}">
     <button type="submit" class="secondary">ページから再取得</button>
   </form>
