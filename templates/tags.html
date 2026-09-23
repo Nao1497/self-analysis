@@ -2,6 +2,10 @@
 {% block title %}タグ一覧 - TagClip{% endblock %}
 {% block content %}
 
+<nav class="tabs">
+  <a class="is-on" href="{{ url_for('tags') }}">タグ一覧</a>
+  <a href="{{ url_for('ranking') }}">ランキング</a>
+</nav>
 <h1>タグ一覧（{{ tags|length }} 種類）</h1>
 
 <div class="card">

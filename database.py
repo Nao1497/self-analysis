@@ -58,6 +58,20 @@ def is_marked(tag):
     return tag[:1] in MARKS
 
 
+# 一覧・ランキングの「印」での絞り込み： 値 → 対象にする印
+MARK_FILTERS = {"star": ("★",), "hollow": ("☆",), "any": MARKS, "none": ()}
+
+
+def _mark_condition(mark, name_col="t.name"):
+    """タグの印で絞り込むSQL条件と値。mark が不正なら (None, [])"""
+    if mark not in MARK_FILTERS:
+        return None, []
+    if mark == "none":  # 印のないタグ（ページから取ったタグ）
+        return f"substr({name_col}, 1, 1) NOT IN ({','.join('?' * len(MARKS))})", list(MARKS)
+    marks = MARK_FILTERS[mark]
+    return f"substr({name_col}, 1, 1) IN ({','.join('?' * len(marks))})", list(marks)
+
+
 def now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -227,9 +241,28 @@ def _escape_like(text):
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def search_articles(tags=(), mode="and", keyword="", status="", sort="new", page=1):
-    """条件に合う記事を1ページ分と、全体の件数を返す。"""
+def search_articles(tags=(), mode="and", keyword="", status="", sort="new", page=1,
+                    mark="", since="", until=""):
+    """条件に合う記事を1ページ分と、全体の件数を返す。
+
+    mark：★☆タグを持つ記事だけにする（star / hollow / any）
+    since, until：登録日（YYYY-MM-DD、両端を含む）で絞り込む
+    """
     where, params = [], []
+
+    if mark in ("star", "hollow", "any"):
+        cond, values = _mark_condition(mark)
+        where.append(
+            f"""a.id IN (SELECT at.article_id FROM article_tags at
+                JOIN tags t ON t.id = at.tag_id WHERE {cond})"""
+        )
+        params.extend(values)
+    if since:
+        where.append("a.created_at >= ?")
+        params.append(since)
+    if until:
+        where.append("a.created_at < ?")
+        params.append(_next_day(until))
 
     if tags:
         placeholders = ",".join("?" * len(tags))
@@ -272,6 +305,36 @@ def search_articles(tags=(), mode="and", keyword="", status="", sort="new", page
     for a in articles:
         a["tags"] = tag_map.get(a["id"], [])
     return articles, total
+
+
+def _next_day(date_text):
+    from datetime import date, timedelta
+    return (date.fromisoformat(date_text) + timedelta(days=1)).isoformat()
+
+
+def tag_ranking(since="", until="", mark="", limit=50):
+    """期間内に登録された記事で、よく付いているタグの順位。戻り値：(順位リスト, 期間内の記事数)"""
+    where, params = [], []
+    if since:
+        where.append("a.created_at >= ?")
+        params.append(since)
+    if until:
+        where.append("a.created_at < ?")
+        params.append(_next_day(until))
+    date_sql = " AND ".join(where) or "1"
+    cond, values = _mark_condition(mark)
+    tag_sql = f"AND {cond}" if cond else ""
+    with connect() as conn:
+        rows = conn.execute(
+            f"""SELECT t.name, COUNT(*) AS cnt FROM article_tags at
+                JOIN tags t ON t.id = at.tag_id
+                JOIN articles a ON a.id = at.article_id
+                WHERE {date_sql} {tag_sql}
+                GROUP BY t.id ORDER BY cnt DESC, t.name COLLATE NOCASE LIMIT ?""",
+            params + values + [limit],
+        ).fetchall()
+        total = conn.execute(f"SELECT COUNT(*) FROM articles a WHERE {date_sql}", params).fetchone()[0]
+    return [(r["name"], r["cnt"]) for r in rows], total
 
 
 def tag_counts(order="count"):

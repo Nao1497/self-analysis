@@ -22,7 +22,17 @@
         <option value="pending" {{ 'selected' if filters.status == 'pending' }}>取得待ち（{{ counts.pending }}）</option>
       </select>
     </label>
+    <label>印
+      <select name="mark" onchange="this.form.submit()">
+        <option value="">指定なし</option>
+        {% for value, label in mark_labels.items() %}
+          <option value="{{ value }}" {{ 'selected' if filters.mark == value }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
   </div>
+  {% if filters.since %}<input type="hidden" name="since" value="{{ filters.since }}">{% endif %}
+  {% if filters.until %}<input type="hidden" name="until" value="{{ filters.until }}">{% endif %}
 
   <details class="tag-picker" {{ 'open' if filters.tags }}>
     <summary>タグで絞り込む{% if filters.tags %}（{{ filters.tags|length }}個選択中）{% endif %}</summary>
@@ -32,6 +42,11 @@
       <label class="radio"><input type="radio" name="mode" value="or" {{ 'checked' if filters.mode == 'or' }}> どれかを含む（OR）</label>
     </div>
     {% if all_tags %}
+      <div class="row mark-toggle" data-target="#tag-checks">
+        <button type="button" class="small secondary is-on" data-mark="">すべて</button>
+        <button type="button" class="small secondary mark-star" data-mark="★">★だけ</button>
+        <button type="button" class="small secondary mark-hollow" data-mark="☆">☆だけ</button>
+      </div>
       <input type="search" class="tag-filter" data-target="#tag-checks" placeholder="タグ名で候補を絞る">
       <div id="tag-checks" class="tag-checks">
         {% set selected = filters.tags|map('lower')|list %}
@@ -51,7 +66,7 @@
   </details>
 </form>
 
-{% if filters.tags or filters.q or filters.status %}
+{% if filters.tags or filters.q or filters.status or filters.mark or filters.since or filters.until %}
   <div class="active-filters">
     {% for t in filters.tags %}
       <a class="chip chip-active" href="{{ list_url(filters, tags=filters.tags|reject('equalto', t)|list, page=1) }}" title="この条件を外す">{{ t }} ✕</a>
@@ -59,6 +74,8 @@
     {% if filters.tags|length > 1 %}<span class="muted">（{{ 'すべて含む' if filters.mode == 'and' else 'どれかを含む' }}）</span>{% endif %}
     {% if filters.q %}<a class="chip chip-active" href="{{ list_url(filters, q='', page=1) }}">「{{ filters.q }}」 ✕</a>{% endif %}
     {% if filters.status %}<a class="chip chip-active" href="{{ list_url(filters, status='', page=1) }}">{{ status_labels[filters.status] }} ✕</a>{% endif %}
+    {% if filters.mark %}<a class="chip chip-active" href="{{ list_url(filters, mark='', page=1) }}">{{ mark_labels[filters.mark] }} ✕</a>{% endif %}
+    {% if filters.since or filters.until %}<a class="chip chip-active" href="{{ list_url(filters, since='', until='', page=1) }}">登録日 {{ filters.since or '…' }}〜{{ filters.until or '…' }} ✕</a>{% endif %}
     <a class="clear" href="{{ url_for('index') }}">条件をすべて解除</a>
   </div>
 {% endif %}

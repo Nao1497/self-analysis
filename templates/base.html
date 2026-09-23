@@ -12,7 +12,7 @@
     <nav>
       <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">一覧</a>
       <a href="{{ url_for('add') }}" class="{{ 'active' if request.endpoint == 'add' }}">登録</a>
-      <a href="{{ url_for('tags') }}" class="{{ 'active' if request.endpoint == 'tags' }}">タグ</a>
+      <a href="{{ url_for('tags') }}" class="{{ 'active' if request.endpoint in ('tags', 'ranking') }}">タグ</a>
       <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint in ('settings', 'settings_test') }}">設定</a>
     </nav>
   </header>

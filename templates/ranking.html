@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}タグランキング - TagClip{% endblock %}
+{% block content %}
+
+<nav class="tabs">
+  <a href="{{ url_for('tags') }}">タグ一覧</a>
+  <a class="is-on" href="{{ url_for('ranking') }}">ランキング</a>
+</nav>
+<h1>タグランキング</h1>
+
+<form class="card" method="get" action="{{ url_for('ranking') }}">
+  <label>期間（登録日で数えます）</label>
+  <div class="segmented">
+    {% for value, label in periods %}
+      <label class="seg">
+        <input type="radio" name="period" value="{{ value }}" {{ 'checked' if period == value }} onchange="this.form.submit()">
+        <span>{{ label }}</span>
+      </label>
+    {% endfor %}
+  </div>
+  {% if period == 'custom' %}
+    <div class="row dates">
+      <input type="date" name="since" value="{{ since }}" aria-label="開始日">
+      <span>〜</span>
+      <input type="date" name="until" value="{{ until }}" aria-label="終了日">
+      <button type="submit" class="small">表示</button>
+    </div>
+  {% endif %}
+
+  <label>対象のタグ</label>
+  <div class="segmented">
+    {% for value, label in marks.items() %}
+      <label class="seg">
+        <input type="radio" name="mark" value="{{ value }}" {{ 'checked' if mark == value }} onchange="this.form.submit()">
+        <span>{{ label }}</span>
+      </label>
+    {% endfor %}
+  </div>
+</form>
+
+<p class="muted">
+  {% if since or until %}{{ since or '最初' }} 〜 {{ until or '今日' }}{% else %}全期間{% endif %}
+  に登録された記事 {{ total }} 件で数えています（1つの記事に付いたタグは1回と数えます）。
+</p>
+
+{% if rows %}
+  <ol class="card ranking">
+    {% for name, cnt in rows %}
+      <li>
+        <span class="rank">{{ loop.index }}</span>
+        <a class="chip {{ mark_class(name) }}" href="{{ url_for('index', tag=name, since=since or None, until=until or None) }}">{{ name }}</a>
+        <span class="bar"><span style="width: {{ (cnt / top * 100)|round(1) }}%"></span></span>
+        <span class="count">{{ cnt }}件</span>
+      </li>
+    {% endfor %}
+  </ol>
+  <p class="muted">タグをタップすると、この期間にそのタグが付いた記事の一覧を表示します。上位{{ rows|length }}件まで表示しています。</p>
+{% else %}
+  <p class="card muted">この条件に当てはまるタグはありません。</p>
+{% endif %}
+
+{% endblock %}

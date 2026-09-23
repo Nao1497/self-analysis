@@ -38,23 +38,28 @@
   <label for="memo">メモ（任意）</label>
   <textarea id="memo" name="memo" rows="3" placeholder="この記事についてのメモ">{{ memo }}</textarea>
 
-  <fieldset class="mark-box">
+  <fieldset class="mark-box" id="mark-picker" data-initial="{{ chosen|tojson|forceescape }}">
     <legend>自分で付けるタグ（任意）</legend>
-    <p class="muted">ページから取るタグとは別に、★や☆を付けたタグを付けられます。色分けして表示し、ページから取り直しても消えません。</p>
-    {% if mark_tags %}
-      <div class="tag-checks">
-        {% for name, cnt in mark_tags %}
-          <label class="tag-check">
-            <input type="checkbox" name="mark_tag" value="{{ name }}" {{ 'checked' if name in form.chosen }}>
-            <span class="{{ mark_class(name) }}">{{ name }}<small>{{ cnt }}</small></span>
-          </label>
+    <p class="muted">① タグを選ぶ（または入力して「追加」） → ② 下の一覧で ★ か ☆ を選ぶ。色分けして表示し、ページから取り直しても消えません。</p>
+
+    {% if candidates %}
+      <div class="chips mark-candidates">
+        {% for c in candidates %}
+          <button type="button" class="chip cand" data-name="{{ c.name }}" data-mark="{{ c.mark }}">{{ c.name }}</button>
         {% endfor %}
       </div>
     {% endif %}
-    <label for="new_star"><span class="mark-sample mark-star">★</span> を付けて新しく追加</label>
-    <input type="text" id="new_star" name="new_star" value="{{ form.new_star }}" placeholder="例：お気に入り、あとで読む（カンマか「、」で区切る）">
-    <label for="new_hollow"><span class="mark-sample mark-hollow">☆</span> を付けて新しく追加</label>
-    <input type="text" id="new_hollow" name="new_hollow" value="{{ form.new_hollow }}" placeholder="例：保留、参考">
+    <div class="row add-mark">
+      <input type="text" id="mark-input" list="tag-names" placeholder="タグ名を入力" autocomplete="off" enterkeyhint="done">
+      <button type="button" id="mark-add" class="small">追加</button>
+    </div>
+    <datalist id="tag-names">
+      {% for n in tag_names %}<option value="{{ n }}">{% endfor %}
+    </datalist>
+
+    <ul class="selected-marks" id="selected-marks"></ul>
+    <p class="muted" id="selected-empty">まだ選んでいません。</p>
+    <noscript><p class="error-text">この機能にはJavaScriptが必要です。</p></noscript>
   </fieldset>
   <p class="muted">メモと自分で付けるタグは、このとき登録するすべてのURLに付きます。</p>
 

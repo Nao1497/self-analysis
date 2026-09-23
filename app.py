@@ -11,7 +11,7 @@ import socket
 import sqlite3
 import threading
 import webbrowser
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from urllib.parse import urlencode, urlsplit
 
 from bs4 import BeautifulSoup
@@ -51,6 +51,22 @@ def safe_next(default="/"):
 
 # ---------------------------------------------------------------- 一覧・検索
 
+DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+MARK_LABELS = {"star": "★付き", "hollow": "☆付き", "any": "★か☆付き"}
+
+
+def valid_date(text):
+    """YYYY-MM-DD の形の正しい日付ならそのまま、それ以外は空文字を返す。"""
+    text = (text or "").strip()
+    if not DATE_RE.fullmatch(text):
+        return ""
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return ""
+    return text
+
+
 def read_filters():
     tags = []
     for t in request.args.getlist("tag"):
@@ -67,6 +83,9 @@ def read_filters():
         "q": request.args.get("q", "").strip(),
         "status": request.args.get("status", ""),
         "sort": "old" if request.args.get("sort") == "old" else "new",
+        "mark": request.args.get("mark") if request.args.get("mark") in MARK_LABELS else "",
+        "since": valid_date(request.args.get("since")),
+        "until": valid_date(request.args.get("until")),
         "page": page,
     }
 
@@ -77,7 +96,7 @@ def list_url(filters, **changes):
     params = [("tag", t) for t in f["tags"]]
     if f["tags"] and f["mode"] == "or":
         params.append(("mode", "or"))
-    for key in ("q", "status"):
+    for key in ("q", "status", "mark", "since", "until"):
         if f[key]:
             params.append((key, f[key]))
     if f["sort"] == "old":
@@ -93,12 +112,13 @@ def index():
     articles, total = database.search_articles(
         tags=filters["tags"], mode=filters["mode"], keyword=filters["q"],
         status=filters["status"], sort=filters["sort"], page=filters["page"],
+        mark=filters["mark"], since=filters["since"], until=filters["until"],
     )
     pages = max(1, -(-total // database.PER_PAGE))
     return render_template(
         "index.html",
         articles=articles, total=total, pages=pages, filters=filters,
-        all_tags=database.tag_counts(), list_url=list_url,
+        all_tags=database.tag_counts(), list_url=list_url, mark_labels=MARK_LABELS,
     )
 
 
@@ -108,16 +128,42 @@ def tags():
     return render_template("tags.html", tags=database.tag_counts(order), order=order)
 
 
+RANKING_PERIODS = [("1", "今日"), ("7", "7日間"), ("30", "30日間"), ("90", "90日間"),
+                   ("365", "1年間"), ("all", "全期間"), ("custom", "期間を指定")]
+RANKING_MARKS = {"": "すべてのタグ", "star": "★タグ", "hollow": "☆タグ", "none": "ページのタグ"}
+
+
+@app.route("/ranking")
+def ranking():
+    """期間内に登録された記事のタグの順位。"""
+    period = request.args.get("period", "30")
+    if period not in dict(RANKING_PERIODS):
+        period = "30"
+    mark = request.args.get("mark", "")
+    if mark not in RANKING_MARKS:
+        mark = ""
+    today = date.today()
+    if period == "custom":
+        since, until = valid_date(request.args.get("since")), valid_date(request.args.get("until"))
+        if not since and not until:  # 最初に選んだときは直近30日を入れておく
+            since, until = (today - timedelta(days=29)).isoformat(), today.isoformat()
+        if since and until and since > until:
+            since, until = until, since
+    elif period == "all":
+        since = until = ""
+    else:
+        since, until = (today - timedelta(days=int(period) - 1)).isoformat(), today.isoformat()
+    rows, total = database.tag_ranking(since, until, mark)
+    return render_template(
+        "ranking.html", rows=rows, total=total, period=period, periods=RANKING_PERIODS,
+        mark=mark, marks=RANKING_MARKS, since=since, until=until,
+        top=rows[0][1] if rows else 1,
+    )
+
+
 # ---------------------------------------------------------------- URL登録
 
 URL_IN_TEXT = re.compile(r"https?://\S+")
-
-
-def marked_tags(text, mark):
-    """カンマ・読点・改行区切りで入力したタグの先頭に印（★ か ☆）を付ける。"""
-    names = re.split(r"[,、，\n]", text)
-    names = [n.strip().lstrip("★☆#＃").strip() for n in names]
-    return [mark + n for n in names if n]
 
 
 def clean_memo(text):
@@ -129,26 +175,18 @@ def add():
     settings = database.get_settings()
     domains = scraper.parse_domains(settings["target_domains"])
     results, text, memo = [], "", ""
-    form = {"chosen": [], "new_star": "", "new_hollow": ""}
+    chosen = []
 
     if request.method == "POST":
         text = request.form.get("urls", "")
         memo = clean_memo(request.form.get("memo", ""))
-        form = {
-            "chosen": request.form.getlist("mark_tag"),
-            "new_star": request.form.get("new_star", ""),
-            "new_hollow": request.form.get("new_hollow", ""),
-        }
-        # 選んだ★☆タグ ＋ 新しく入力した★☆タグ（重複はまとめる）
-        user_tags = scraper.clean_tags(
-            [t for t in form["chosen"] if database.is_marked(t)]
-            + marked_tags(form["new_star"], "★")
-            + marked_tags(form["new_hollow"], "☆")
-        )
+        # 選んだタグ（画面で★か☆を付けたもの。重複はまとめる）
+        chosen = scraper.clean_tags(t for t in request.form.getlist("mark_tag") if database.is_marked(t))
+        user_tags = chosen
         if not domains:
             flash("先に「設定」画面で対象ドメインを設定してください。", "error")
             return render_template("add.html", domains=domains, results=[], text=text, memo=memo,
-                                   form=form, mark_tags=mark_tag_choices())
+                                   chosen=chosen, **mark_tag_choices())
 
         seen, new_ids = set(), []
         for line in text.splitlines():
@@ -175,22 +213,33 @@ def add():
 
         worker.enqueue(new_ids)
         if new_ids:  # 登録できたときは入力欄を空にする
-            text, memo = "", ""
-            form = {"chosen": [], "new_star": "", "new_hollow": ""}
+            text, memo, chosen = "", "", []
         if not results:
             flash("URLが入力されていません。", "error")
 
     added = sum(1 for r in results if r["ok"])
     return render_template(
-        "add.html", domains=domains, results=results, text=text, memo=memo, form=form,
-        mark_tags=mark_tag_choices(), added=added, skipped=len(results) - added,
+        "add.html", domains=domains, results=results, text=text, memo=memo, chosen=chosen,
+        **mark_tag_choices(), added=added, skipped=len(results) - added,
         selector_missing=not settings["tag_selector"].strip(),
     )
 
 
 def mark_tag_choices():
-    """登録画面で選べる★☆タグ（これまでに使ったもの）。"""
-    return [(name, cnt) for name, cnt in database.tag_counts() if database.is_marked(name)]
+    """登録画面のタグ候補。
+
+    candidates：これまでに使った★☆タグ（印を外した名前と、前回の印）
+    tag_names ：入力欄の候補に出す、すべてのタグ名（印は外す）
+    """
+    candidates, names, seen = [], [], set()
+    for name, _cnt in database.tag_counts():
+        base = name.lstrip("★☆").strip()
+        if database.is_marked(name) and base.lower() not in seen:
+            seen.add(base.lower())
+            candidates.append({"name": base, "mark": name[0]})
+        if base and base not in names:
+            names.append(base)
+    return {"candidates": candidates, "tag_names": names}
 
 
 # ---------------------------------------------------------------- 設定
